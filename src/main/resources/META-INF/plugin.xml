@@ -1,0 +1,39 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>dev.gaphunter.terraformiamwildcardcompanion</id>
+    <name>Terraform IAM Wildcard Companion</name>
+    <vendor>Gap Hunter Labs</vendor>
+    <description><![CDATA[
+        <p>Warning on an IAM policy statement (inside a Terraform
+        <code>aws_iam_policy</code>/<code>aws_iam_role_policy</code>
+        resource's <code>jsonencode({...})</code> block) whose
+        <code>Action</code> or <code>Resource</code> is <code>"*"</code>
+        with no <code>Condition</code> scoping it down -- a direct
+        violation of least-privilege, documented as a dedicated check by
+        tfsec (<code>no-policy-wildcards</code>) and Tenable, a real
+        vector for privilege escalation in cloud incidents.</p>
+        <p><b>Not a JSON parser</b> -- despite the name
+        <code>jsonencode</code>, its argument is an HCL map/list literal
+        (evaluated to a JSON string only at Terraform apply time), walked
+        directly via brace/bracket balancing that respects string
+        literals. No Terraform/HCL PSI dependency -- the platform bundles
+        none for a Kotlin-only plugin.</p>
+        <p>Stated honestly: v0.1 only the direct HCL pattern
+        (<code>jsonencode({...})</code> embedded directly in the
+        resource) -- never follows a policy loaded from an external
+        <code>.json</code> file via <code>file(...)</code>.</p>
+        <p>Free. No license nags, no telemetry, no network calls.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <localInspection language=""
+            groupName="Terraform IAM Wildcard Companion"
+            displayName="Overly permissive IAM policy statement"
+            enabledByDefault="true"
+            level="WARNING"
+            implementationClass="dev.gaphunter.terraformiamwildcardcompanion.inspection.IamWildcardInspection"/>
+        <notificationGroup id="Terraform IAM Wildcard Companion" displayType="BALLOON"/>
+    </extensions>
+</idea-plugin>
