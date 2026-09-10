@@ -5,6 +5,12 @@ Warning on an IAM policy statement (inside a Terraform
 block) whose `Action` or `Resource` is `"*"` with no `Condition`
 scoping it down.
 
+## Screenshots
+
+![Screenshot 1](docs/screenshots/Screenshot_1.png)
+
+![Screenshot 2](docs/screenshots/Screenshot_2.png)
+
 ## Why it exists
 
 A direct violation of least-privilege, documented as a dedicated check
