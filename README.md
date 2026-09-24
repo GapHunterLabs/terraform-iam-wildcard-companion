@@ -27,13 +27,25 @@ inline IDE inspection.
   that respects string literals, no Terraform/HCL PSI dependency (the
   platform bundles none for a Kotlin-only plugin).
 - Handles both `Action`/`Resource` string form (`Action = "*"`) and
-  list form (`Action = ["s3:*", "*"]`).
+  list form (`Action = ["s3:*", "*"]`), and both `Statement` forms --
+  a list of statements or a single statement object (AWS IAM allows
+  both when there's exactly one statement).
+- **`Effect = "Deny"` is never flagged**, even with unscoped wildcards
+  -- a `Deny` on `Action = "*"`/`Resource = "*"` with no `Condition` is
+  the *most* restrictive statement possible (AWS's own documented
+  "quarantine" pattern for isolating a compromised principal), the
+  opposite of a least-privilege violation.
 
 ## v0.1 scope — stated honestly, not exhaustively
 
-Only the direct HCL pattern (`jsonencode({...})` embedded directly in
-the resource) -- never follows a policy loaded from an external
-`.json` file via `file(...)`.
+- Only the direct HCL pattern (`jsonencode({...})` embedded directly
+  in the resource) -- never follows a policy loaded from an external
+  `.json` file via `file(...)`.
+- Never parses the `aws_iam_policy_document` data source (`statement {
+  actions = [...] resources = [...] }` blocks) -- a different, very
+  common HCL shape for the same thing. This is a real, known gap, not
+  a hidden one: building it is effectively a second parser, planned
+  for a future version, not silently "handled" today.
 
 ## Usage
 

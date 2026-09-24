@@ -28,12 +28,14 @@ object HclJsonEncodeScanner {
 
     private val RESOURCE_HEADER = Regex("""resource\s+"(aws_iam_policy|aws_iam_role_policy)"\s+"[\w-]+"\s*\{""")
     private val JSONENCODE_CALL = Regex("""policy\s*=\s*jsonencode\s*\(""")
-    private val STATEMENT_KEY = Regex(""""?Statement"?\s*=\s*\[""")
+    private val STATEMENT_LIST_KEY = Regex(""""?Statement"?\s*=\s*\[""")
+    private val STATEMENT_OBJECT_KEY = Regex(""""?Statement"?\s*=\s*\{""")
     private val ACTION_STRING = Regex(""""?Action"?\s*=\s*"([^"]*)"""")
     private val ACTION_LIST = Regex(""""?Action"?\s*=\s*\[([^]]*)]""")
     private val RESOURCE_STRING = Regex(""""?Resource"?\s*=\s*"([^"]*)"""")
     private val RESOURCE_LIST = Regex(""""?Resource"?\s*=\s*\[([^]]*)]""")
     private val CONDITION_KEY = Regex(""""?Condition"?\s*=\s*\{""")
+    private val EFFECT_DENY = Regex(""""?Effect"?\s*=\s*"Deny"""")
 
     fun scan(text: String): List<IamWildcardHit> {
         val hits = mutableListOf<IamWildcardHit>()
@@ -65,31 +67,54 @@ object HclJsonEncodeScanner {
     }
 
     private fun hitsInPolicyObject(fullText: String, policyObject: String, policyObjectOffset: Int): List<IamWildcardHit> {
-        val statementMatch = STATEMENT_KEY.find(policyObject) ?: return emptyList()
-        val listStart = statementMatch.range.last // index of the '['
-        val listStartAbs = policyObjectOffset + listStart
-        val listEndAbs = BalancedBraceMatcher.findMatchingClose(fullText, listStartAbs, '[', ']') ?: return emptyList()
+        STATEMENT_LIST_KEY.find(policyObject)?.let { statementMatch ->
+            val listStart = statementMatch.range.last // index of the '['
+            val listStartAbs = policyObjectOffset + listStart
+            val listEndAbs = BalancedBraceMatcher.findMatchingClose(fullText, listStartAbs, '[', ']') ?: return emptyList()
 
-        val hits = mutableListOf<IamWildcardHit>()
-        var i = listStartAbs + 1
-        while (i < listEndAbs) {
-            val c = fullText[i]
-            if (c == '{') {
-                val stmtEnd = BalancedBraceMatcher.findMatchingClose(fullText, i, '{', '}')
-                if (stmtEnd == null || stmtEnd > listEndAbs) break
-                val statementText = fullText.substring(i, stmtEnd + 1)
-                hits += hitsInStatement(statementText, i)
-                i = stmtEnd + 1
-            } else {
-                i++
+            val hits = mutableListOf<IamWildcardHit>()
+            var i = listStartAbs + 1
+            while (i < listEndAbs) {
+                val c = fullText[i]
+                if (c == '{') {
+                    val stmtEnd = BalancedBraceMatcher.findMatchingClose(fullText, i, '{', '}')
+                    if (stmtEnd == null || stmtEnd > listEndAbs) break
+                    val statementText = fullText.substring(i, stmtEnd + 1)
+                    hits += hitsInStatement(statementText, i)
+                    i = stmtEnd + 1
+                } else {
+                    i++
+                }
             }
+            return hits
         }
-        return hits
+
+        // AWS IAM policy JSON also allows "Statement" to be a single object
+        // instead of an array when there's exactly one statement -- both
+        // forms are valid, and real Terraform code uses the object form for
+        // simple single-permission policies.
+        STATEMENT_OBJECT_KEY.find(policyObject)?.let { statementMatch ->
+            val objStart = statementMatch.range.last // index of the '{'
+            val objStartAbs = policyObjectOffset + objStart
+            val objEndAbs = BalancedBraceMatcher.findMatchingClose(fullText, objStartAbs, '{', '}') ?: return emptyList()
+            val statementText = fullText.substring(objStartAbs, objEndAbs + 1)
+            return hitsInStatement(statementText, objStartAbs)
+        }
+
+        return emptyList()
     }
 
     private fun hitsInStatement(statementText: String, statementStartOffset: Int): List<IamWildcardHit> {
         val hasCondition = CONDITION_KEY.containsMatchIn(statementText)
         if (hasCondition) return emptyList()
+
+        // An unscoped wildcard is a least-privilege violation only when the
+        // statement ALLOWS it. "Effect = Deny" with Action/Resource "*" and
+        // no Condition is the opposite -- a maximally restrictive guardrail
+        // (e.g. AWS's own documented "quarantine" policy for a compromised
+        // principal) -- flagging it would be a real false positive on one of
+        // the most common security patterns in practice.
+        if (EFFECT_DENY.containsMatchIn(statementText)) return emptyList()
 
         val hits = mutableListOf<IamWildcardHit>()
         if (fieldHasWildcard(statementText, ACTION_STRING, ACTION_LIST)) {

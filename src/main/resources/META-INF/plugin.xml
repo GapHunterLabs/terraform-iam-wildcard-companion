@@ -18,10 +18,17 @@
         directly via brace/bracket balancing that respects string
         literals. No Terraform/HCL PSI dependency -- the platform bundles
         none for a Kotlin-only plugin.</p>
-        <p>Stated honestly: v0.1 only the direct HCL pattern
+        <p>An <code>Effect = "Deny"</code> statement is never flagged,
+        even with unscoped wildcards -- that's the most restrictive
+        statement possible (AWS's own "quarantine" pattern for a
+        compromised principal), not a least-privilege violation.
+        Handles both a statement list and a single statement object.</p>
+        <p>Stated honestly: only the direct HCL pattern
         (<code>jsonencode({...})</code> embedded directly in the
         resource) -- never follows a policy loaded from an external
-        <code>.json</code> file via <code>file(...)</code>.</p>
+        <code>.json</code> file via <code>file(...)</code>, and never
+        parses the <code>aws_iam_policy_document</code> data source
+        (a different, common HCL shape for the same thing).</p>
         <p>Free. No license nags, no telemetry, no network calls.</p>
     ]]></description>
 
