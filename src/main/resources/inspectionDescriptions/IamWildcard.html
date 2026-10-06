@@ -1,0 +1,10 @@
+<html>
+<body>
+Reports an IAM policy statement in a Terraform <code>aws_iam_policy</code> or <code>aws_iam_role_policy</code>
+<code>jsonencode({...})</code> block whose <code>Action</code> or <code>Resource</code> is <code>"*"</code> with no
+<code>Condition</code> that narrows it.
+<!-- tooltip end -->
+<p>A wildcard statement breaks least privilege and is a common path to privilege escalation in cloud incidents.
+Name the specific actions and resources the role needs.</p>
+</body>
+</html>
